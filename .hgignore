@@ -1,0 +1,4 @@
+syntax: glob
+
+dist
+.stack-work

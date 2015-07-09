@@ -1,0 +1,20 @@
+name:                differential
+version:             0.1.0
+synopsis:            A command line viewer for unified diffs
+category:            Development
+
+author:              Enno Cramer
+maintainer:          ecramer@memfrob.de
+license:             GPL-3
+license-file:        LICENSE
+homepage:            https://memfrob.de/
+
+build-type:          Simple
+cabal-version:       >=1.10
+
+executable differential
+  main-is:             Main.hs
+  build-depends:       base >=4.7 && <4.8
+  hs-source-dirs:      src
+  default-language:    Haskell98
+  ghc-options:         -Wall
