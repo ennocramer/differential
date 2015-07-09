@@ -53,10 +53,10 @@ data LineType = Context | Old | New
 diffTitle :: Diff -> String
 diffTitle diff =
   case headerType header of
-    FileAdded    -> new ++ " (added)"
-    FileDeleted  -> old ++ " (deleted)"
-    FileRenamed  -> new ++ " (was " ++ old ++ ")"
-    FileModified -> new
+    FileAdded    -> "A " ++ new
+    FileDeleted  -> "R " ++ old
+    FileRenamed  -> "M " ++ new ++ " (was " ++ old ++ ")"
+    FileModified -> "M " ++ new
   where
     header = diffHeader diff
     old = realPath $ headerOldFile header
