@@ -63,8 +63,15 @@ runUI (Patch diffs) = do
   _ <- addToCollection c ui fg
 
   fg `onKeyPressed` \_ key _ ->
-    if key == KChar 'q' then
-      exitSuccess else return False
+    case key of
+      KChar 'p' -> do scrollUp files; return True
+      KChar 'n' -> do scrollDown files; return True
+      KChar 'u' -> do scrollUp patch; return True
+      KChar 'd' -> do scrollDown patch; return True
+      KChar 'b' -> do pageUp patch; return True
+      KChar ' ' -> do pageDown patch; return True
+      KChar 'q' -> exitSuccess
+      _         -> return False
 
   files `onSelectionChange` \ev -> do
     clearList patch
