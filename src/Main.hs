@@ -2,6 +2,7 @@
 module Main (main) where
 
 import Differential.Parser
+import Differential.Ui
 import System.Environment
 
 import Data.Text.Lazy (Text)
@@ -20,4 +21,4 @@ run source = do
   input <- source
   case parse input of
     Left err -> putStrLn err
-    Right patch -> putStrLn $ show patch
+    Right patch -> runUI patch

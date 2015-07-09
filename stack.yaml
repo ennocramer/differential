@@ -1,5 +1,7 @@
 flags: {}
 packages:
 - '.'
-extra-deps: []
+extra-deps:
+- vty-5.2.9
+- vty-ui-1.8
 resolver: lts-2.17
