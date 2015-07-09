@@ -8,6 +8,7 @@ import Differential.Diff
 import Control.Monad.Writer (runWriter, tell)
 import System.Exit (exitSuccess)
 import qualified Data.Text as T
+import qualified Data.Char as C
 
 ctxColor :: Color
 ctxColor = white
@@ -46,7 +47,15 @@ renderDiff diff = snd $ runWriter $ do
 
     writeLine (Line (t, s)) = write (lineColor t) s
 
-    write clr txt = tell [(txt, fgColor clr)]
+    write clr txt = tell [(protect txt, fgColor clr)]
+
+    protect = T.concatMap protectChar
+    protectChar c =
+      if c == '\n' then T.empty
+      else if c == '\t' then T.pack $ replicate 8 ' '
+      else if C.isSpace c then T.singleton ' '
+      else if C.isControl c then T.singleton '.'
+      else T.singleton c
 
 -- |Display a Patch using the Vty-UI UI.
 runUI :: Patch -> IO ()
