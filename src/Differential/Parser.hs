@@ -48,11 +48,11 @@ diff = do
   cmt <- comment
   hdr <- header
   hnk <- many hunk
-  return Diff { diffComment = map T.pack cmt
+  return Diff { diffComment = cmt
               , diffHeader = hdr
               , diffHunks = hnk }
 
-comment :: Parser [String]
+comment :: Parser [T.Text]
 comment = many $ try (notFollowedBy header) >> text
 
 header :: Parser Header
@@ -68,8 +68,8 @@ header = do
   return Header { headerType = diffType oldFile newFile
                 , headerOldFile = oldFile
                 , headerNewFile = newFile
-                , headerOldLine = T.pack oldLine
-                , headerNewLine = T.pack newLine }
+                , headerOldLine = oldLine
+                , headerNewLine = newLine }
 
 hunk :: Parser Hunk
 hunk = do
@@ -86,8 +86,8 @@ hunk = do
   lns  <- many line
   return Hunk { hunkOldRange = old
               , hunkNewRange = new
-              , hunkComment  = T.pack cmt
-              , hunkLine     = T.pack full
+              , hunkComment  = cmt
+              , hunkLine     = full
               , hunkLines    = lns }
 
 range :: Parser (Int, Int)
@@ -102,9 +102,9 @@ line = do
   try $ notFollowedBy header
   _       <- lookAhead $ oneOf "+- "
   content <- text
-  return $ Line (lineType content, T.pack content)
+  return $ Line (lineType (T.unpack content), content)
 
-text :: Parser String
+text :: Parser T.Text
 text = do
   content <- manyTill anyChar (try (string "\r\n") <|> string "\n")
-  return $ content
+  return $ T.pack content
