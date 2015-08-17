@@ -107,4 +107,4 @@ line = do
 text :: Parser String
 text = do
   content <- manyTill anyChar (try (string "\r\n") <|> string "\n")
-  return $ content ++ "\n"
+  return $ content
