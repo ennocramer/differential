@@ -53,7 +53,13 @@ diff = do
               , diffHunks = hnk }
 
 comment :: Parser [T.Text]
-comment = many $ try (notFollowedBy header) >> text
+comment = many $ try (notFollowedBy headerLookAhead) >> text
+
+headerLookAhead :: Parser ()
+headerLookAhead = do
+  _ <- string "--- " >> manyTill anyChar newline
+  _ <- string "+++ " >> manyTill anyChar newline
+  return ()
 
 header :: Parser Header
 header = do
@@ -106,5 +112,6 @@ line = do
 
 text :: Parser T.Text
 text = do
-  content <- manyTill anyChar (try (string "\r\n") <|> string "\n")
+  content <- many (noneOf "\r\n")
+  _       <- endOfLine
   return $ T.pack content
