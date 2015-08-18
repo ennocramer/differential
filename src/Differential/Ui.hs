@@ -5,7 +5,6 @@ import Graphics.Vty
 import Graphics.Vty.Widgets.All
 
 import Differential.Diff
-import Control.Monad.Writer (runWriter, tell)
 import System.Exit (exitSuccess)
 import qualified Data.Text as T
 import qualified Data.Char as C
@@ -28,26 +27,23 @@ lineColor Old = delColor
 lineColor Context = ctxColor
 
 renderDiff :: Diff -> [(T.Text, Attr)]
-renderDiff diff = snd $ runWriter $ do
-  writeComment $ diffComment diff
-  writeHeader $ diffHeader diff
-  writeHunks $ diffHunks diff
+renderDiff diff = concatMap ($ diff) [ writeComment . diffComment
+                                     , writeHeader . diffHeader
+                                     , writeHunks . diffHunks ]
   where
-    writeComment = mapM_ (write ctxColor)
+    writeComment = map (write ctxColor)
 
-    writeHeader header = do
-      write delColor $ headerOldLine header
-      write addColor $ headerNewLine header
+    writeHeader header = map ($ header) [ write delColor . headerOldLine
+                                        , write addColor . headerNewLine ]
 
-    writeHunks = mapM_ writeHunk
+    writeHunks = concatMap writeHunk
 
-    writeHunk hunk = do
-      write hunkColor $ hunkLine hunk
-      mapM_ writeLine $ hunkLines hunk
+    writeHunk hunk = (write hunkColor $ hunkLine $ hunk) :
+                     (map writeLine $ hunkLines $ hunk)
 
     writeLine (Line (t, s)) = write (lineColor t) s
 
-    write clr txt = tell [(protect txt, fgColor clr)]
+    write clr txt = (protect txt, fgColor clr)
 
     protect = T.concatMap protectChar
     protectChar c =
