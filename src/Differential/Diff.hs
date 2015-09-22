@@ -14,9 +14,6 @@ module Differential.Diff
     ) where
 
 import qualified Data.Text as T
-import Data.Maybe (fromMaybe)
-import Data.List (stripPrefix)
-import Control.Applicative ((<|>))
 
 -- | A Patch consists of a series of file Diffs.
 data Patch = Patch [Diff]
@@ -84,4 +81,6 @@ diffTitle diff =
 -- | Strip any elements from a path that were added by the diff
 -- generator.  This function currently strips "a\/" and "b\/" prefixes.
 realPath :: FilePath -> FilePath
-realPath p = fromMaybe p $ stripPrefix "a/" p <|> stripPrefix "b/" p
+realPath ('a' : '/' : cs) = cs
+realPath ('b' : '/' : cs) = cs
+realPath p = p
