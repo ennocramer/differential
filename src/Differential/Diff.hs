@@ -1,7 +1,17 @@
 -- | This module defines types to represent unified diffs and
 -- associated convenience functions.
 
-module Differential.Diff where
+module Differential.Diff
+    ( Patch(..)
+    , Diff(..)
+    , Header(..)
+    , ChangeType(..)
+    , Hunk(..)
+    , Line(..)
+    , LineType(..)
+    , diffTitle
+    , realPath
+    ) where
 
 import qualified Data.Text as T
 import Data.Maybe (fromMaybe)

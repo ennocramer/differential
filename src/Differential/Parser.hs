@@ -1,5 +1,7 @@
 -- |  A Parsec-based parser for unified diffs.
-module Differential.Parser (Differential.Parser.parse) where
+module Differential.Parser
+    ( Differential.Parser.parse
+    ) where
 
 import Differential.Diff
 import Text.Parsec.Prim
