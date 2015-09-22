@@ -1,7 +1,5 @@
--- |A Parsec-based parser for unified diffs.
-module Differential.Parser (
-  Differential.Parser.parse
-  ) where
+-- |  A Parsec-based parser for unified diffs.
+module Differential.Parser (Differential.Parser.parse) where
 
 import Differential.Diff
 import Text.Parsec.Prim
@@ -11,7 +9,7 @@ import Text.Parsec.Text.Lazy
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
 
--- |Determine the type of diff based on the two recorded file names.
+-- | Determine the type of diff based on the two recorded file names.
 diffType :: String -> String -> ChangeType
 diffType old new
   | old' == new' = FileModified
@@ -22,14 +20,13 @@ diffType old new
     old' = realPath old
     new' = realPath new
 
--- |Return whether a hunk line is Old, New, or Context
--- line.
+-- | Return whether a hunk line is Old, New, or Context line.
 lineType :: String -> LineType
 lineType ('+' : _) = New
 lineType ('-' : _) = Old
 lineType _ = Context
 
--- |Parse a unified diff, returning either a Patch object or a parser
+-- | Parse a unified diff, returning either a Patch object or a parser
 -- error message.
 parse :: L.Text -> Either String Patch
 parse input =

@@ -1,4 +1,5 @@
--- |This module provides a UI for Differential based on Vty-UI.
+-- | This module provides a UI for Differential based on Vty-UI.
+
 module Differential.Ui (runUI) where
 
 import Graphics.Vty
@@ -53,7 +54,7 @@ renderDiff diff = concatMap ($ diff) [ writeComment . diffComment
       else if C.isControl c then T.singleton '.'
       else T.singleton c
 
--- |Display a Patch using the Vty-UI UI.
+-- | Display a Patch using the Vty-UI UI.
 runUI :: Patch -> IO ()
 runUI (Patch diffs) = do
   files <- newList 1
