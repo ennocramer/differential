@@ -23,5 +23,5 @@ run :: IO Text -> IO ()
 run source = do
   input <- source
   case parse input of
-    Left err -> putStrLn err
+    Left err    -> putStrLn err
     Right patch -> runUI patch

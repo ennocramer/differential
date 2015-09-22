@@ -26,14 +26,14 @@ diffType old new
 lineType :: String -> LineType
 lineType ('+' : _) = New
 lineType ('-' : _) = Old
-lineType _ = Context
+lineType _         = Context
 
 -- | Parse a unified diff, returning either a Patch object or a parser
 -- error message.
 parse :: L.Text -> Either String Patch
 parse input =
   case Text.Parsec.Prim.parse patch "" input of
-    Left e -> Left $ show e
+    Left e  -> Left $ show e
     Right p -> Right p
 
 patch :: Parser Patch
@@ -49,7 +49,8 @@ diff = do
   hnk <- many hunk
   return Diff { diffComment = cmt
               , diffHeader = hdr
-              , diffHunks = hnk }
+              , diffHunks = hnk
+              }
 
 comment :: Parser [T.Text]
 comment = many $ try (notFollowedBy headerLookAhead) >> text
@@ -74,7 +75,8 @@ header = do
                 , headerOldFile = oldFile
                 , headerNewFile = newFile
                 , headerOldLine = oldLine
-                , headerNewLine = newLine }
+                , headerNewLine = newLine
+                }
 
 hunk :: Parser Hunk
 hunk = do
@@ -93,7 +95,8 @@ hunk = do
               , hunkNewRange = new
               , hunkComment  = cmt
               , hunkLine     = full
-              , hunkLines    = lns }
+              , hunkLines    = lns
+              }
 
 range :: Parser (Int, Int)
 range = do
