@@ -1,91 +1,147 @@
+{-# LANGUAGE RecordWildCards #-}
+
 -- | This module provides a UI for Differential based on Vty-UI.
 
 module Differential.Ui (runUI) where
 
-import Graphics.Vty
-import Graphics.Vty.Widgets.All
+import           Data.Char            (isControl, isSpace)
+import           Data.Maybe           (fromMaybe, listToMaybe)
+import           Data.Text            (Text)
+import           Data.Vector          (Vector)
 
-import Differential.Diff
-import System.Exit (exitSuccess)
-import qualified Data.Text as T
-import qualified Data.Char as C
+import qualified Data.Text            as Text
+import qualified Data.Vector          as Vector
 
-ctxColor :: Color
-ctxColor = white
+import qualified Graphics.Vty         as Vty
 
-addColor :: Color
-addColor = green
+import           Brick
+import qualified Brick.AttrMap        as BA
+import qualified Brick.Widgets.Border as BB
+import qualified Brick.Widgets.List   as BL
 
-delColor :: Color
-delColor = red
+import           Differential.Diff
 
-hunkColor :: Color
-hunkColor = yellow
+data Focus = FocusFiles | FocusDiff
 
-lineColor :: LineType -> Color
-lineColor New = addColor
-lineColor Old = delColor
-lineColor Context = ctxColor
+data State = State { stateFiles :: BL.List Diff
+                   , stateDiff  :: BL.List (Text, BA.AttrName)
+                   , stateFocus :: Focus
+                   }
 
-renderDiff :: Diff -> [(T.Text, Attr)]
-renderDiff diff = concatMap ($ diff) [ writeComment . diffComment
-                                     , writeHeader . diffHeader
-                                     , writeHunks . diffHunks ]
-  where
-    writeComment = map (write ctxColor)
+attrHunk :: BA.AttrName
+attrHunk = BA.attrName "hunk"
 
-    writeHeader header = map ($ header) [ write delColor . headerOldLine
-                                        , write addColor . headerNewLine ]
+attrCtx :: BA.AttrName
+attrCtx = BA.attrName "ctx"
 
-    writeHunks = concatMap writeHunk
+attrAdd :: BA.AttrName
+attrAdd = BA.attrName "add"
 
-    writeHunk hunk = (write hunkColor $ hunkLine $ hunk) :
-                     (map writeLine $ hunkLines $ hunk)
+attrDel :: BA.AttrName
+attrDel = BA.attrName "del"
 
-    writeLine (Line (t, s)) = write (lineColor t) s
+maybeRenderDiff :: Maybe Diff -> Vector (Text, BA.AttrName)
+maybeRenderDiff = maybe Vector.empty renderDiff
 
-    write clr txt = (protect txt, fgColor clr)
+renderDiff :: Diff -> Vector (Text, BA.AttrName)
+renderDiff diff = Vector.fromList $ concatMap ($ diff) [ writeComment . diffComment
+                                                       , writeHeader . diffHeader
+                                                       , writeHunks . diffHunks ]
+    where
+      writeComment = map (write attrCtx)
 
-    protect = T.concatMap protectChar
-    protectChar c =
-      if c == '\n' then T.empty
-      else if c == '\t' then T.pack $ replicate 8 ' '
-      else if C.isSpace c then T.singleton ' '
-      else if C.isControl c then T.singleton '.'
-      else T.singleton c
+      writeHeader header = map ($ header) [ write attrDel . headerOldLine
+                                          , write attrAdd . headerNewLine ]
+
+      writeHunks = concatMap writeHunk
+
+      writeHunk hunk = write attrHunk (hunkLine hunk) :
+                       map writeLine (hunkLines hunk)
+
+      writeLine (Line (t, s)) = write (lineColor t) s
+
+      write clr chars = (protect chars, clr)
+
+      protect = Text.concatMap protectChar
+      protectChar c
+          | c == '\n' = Text.empty
+          | c == '\t' = Text.pack $ replicate 8 ' '
+          | isSpace c = Text.singleton ' '
+          | isControl c = Text.singleton '.'
+          | otherwise = Text.singleton c
+
+      lineColor New = attrAdd
+      lineColor Old = attrDel
+      lineColor Context = attrCtx
+
+drawUI :: State -> [ Widget ]
+drawUI State{..} = [ ui ]
+    where
+      files = vLimit 5 $ BL.renderList stateFiles drawFiles
+      diff = BL.renderList stateDiff drawDiff
+      ui = vBox [ files, BB.hBorder, diff ]
+
+      drawFiles _ d = padRight Max $ str $ diffTitle d
+      drawDiff _ (line, attr) = withAttr attr $ padRight Max $ txt line
+
+appEvent :: State -> Vty.Event -> EventM (Next State)
+appEvent s e = do
+  vp <- lookupViewport (Name "diff")
+  let page = fromMaybe 1 (snd . _vpSize <$> vp)
+  case e of
+    Vty.EvKey (Vty.KChar '\t') [] -> continue $ s { stateFocus = case stateFocus s of
+                                                                   FocusFiles -> FocusDiff
+                                                                   FocusDiff -> FocusFiles }
+
+    Vty.EvKey (Vty.KChar 'p') [] -> onFiles (return . BL.listMoveUp)
+    Vty.EvKey (Vty.KChar 'n') [] -> onFiles (return . BL.listMoveDown)
+    Vty.EvKey (Vty.KChar 'u') [] -> onDiff (return . BL.listMoveUp)
+    Vty.EvKey (Vty.KChar 'd') [] -> onDiff (return . BL.listMoveDown)
+    Vty.EvKey (Vty.KChar 'b') [] -> onDiff (return . BL.listMoveBy (negate page))
+    Vty.EvKey (Vty.KChar ' ') [] -> onDiff (return . BL.listMoveBy page)
+    Vty.EvKey (Vty.KChar 'q') [] -> halt s
+
+    ev -> case stateFocus s of
+            FocusFiles -> onFiles (handleEvent ev)
+            FocusDiff -> onDiff (handleEvent ev)
+
+    where
+      onFiles :: (BL.List Diff -> EventM (BL.List Diff)) -> EventM (Next State)
+      onFiles f = do
+        files <- f (stateFiles s)
+        let render = renderDiff . snd <$> BL.listSelectedElement files
+        let diff   = BL.listReplace (fromMaybe Vector.empty render) (Just 0) $ stateDiff s
+        continue $ s { stateFiles = files, stateDiff = diff }
+
+      onDiff :: (BL.List (Text, BA.AttrName) -> EventM (BL.List (Text, BA.AttrName))) -> EventM (Next State)
+      onDiff f = do
+        diff <- f (stateDiff s)
+        continue $ s { stateDiff = diff }
+
+appAttributes :: BA.AttrMap
+appAttributes = BA.attrMap Vty.defAttr
+                [ (BL.listSelectedAttr, Vty.white `on` Vty.blue)
+                , (attrHunk, fg Vty.yellow)
+                , (attrAdd,  fg Vty.green)
+                , (attrDel,  fg Vty.red)
+                ]
+
+app :: App State Vty.Event
+app = App { appDraw = drawUI
+          , appChooseCursor = neverShowCursor
+          , appHandleEvent = appEvent
+          , appStartEvent = return
+          , appAttrMap = const appAttributes
+          , appLiftVtyEvent = id
+          }
 
 -- | Display a Patch using the Vty-UI UI.
 runUI :: Patch -> IO ()
 runUI (Patch diffs) = do
-  files <- newList 1
-  patch <- newList 1
-  ui <- vFixed 5 files <--> hBorder <--> return patch
-
-  fg <- newFocusGroup
-  _ <- addToFocusGroup fg files
-  _ <- addToFocusGroup fg patch
-
-  c <- newCollection
-  _ <- addToCollection c ui fg
-
-  fg `onKeyPressed` \_ key _ ->
-    case key of
-      KChar 'p' -> do scrollUp files; return True
-      KChar 'n' -> do scrollDown files; return True
-      KChar 'u' -> do scrollUp patch; return True
-      KChar 'd' -> do scrollDown patch; return True
-      KChar 'b' -> do pageUp patch; return True
-      KChar ' ' -> do pageDown patch; return True
-      KChar 'q' -> exitSuccess
-      _         -> return False
-
-  files `onSelectionChange` \ev -> do
-    clearList patch
-    case ev of
-      SelectionOn _ diff _ -> mapM_ (\line -> addToList patch () =<< plainTextWithAttrs [line]) (renderDiff diff)
-      SelectionOff -> return ()
-
-  mapM_ (\d -> addToList files d =<< plainText (T.pack $ diffTitle d)) diffs
-  setSelected files 0
-
-  runUi c defaultContext
+  _ <- defaultMain app initialState
+  return ()
+      where
+        initialState = State { stateFiles = BL.list (Name "files") (Vector.fromList diffs) 1
+                             , stateDiff = BL.list (Name "diff") (maybeRenderDiff $ listToMaybe diffs) 1
+                             , stateFocus = FocusFiles
+                             }
