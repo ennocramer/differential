@@ -1,23 +1,23 @@
 -- |  A Parsec-based parser for unified diffs.
-module Differential.Parser
-    ( Differential.Parser.parse
-    ) where
+module Differential.Parser ( Differential.Parser.parse ) where
 
-import Differential.Diff
-import Text.Parsec.Prim
-import Text.Parsec.Char
-import Text.Parsec.Combinator
-import Text.Parsec.Text.Lazy
-import qualified Data.Text as T
-import qualified Data.Text.Lazy as L
+import qualified Data.Text              as T
+import qualified Data.Text.Lazy         as L
+
+import           Differential.Diff
+
+import           Text.Parsec.Char
+import           Text.Parsec.Combinator
+import           Text.Parsec.Prim
+import           Text.Parsec.Text.Lazy
 
 -- | Determine the type of diff based on the two recorded file names.
 diffType :: String -> String -> ChangeType
 diffType old new
-  | old' == new' = FileModified
-  | old' == "/dev/null" = FileAdded
-  | new' == "/dev/null" = FileDeleted
-  | otherwise = FileRenamed
+    | old' == new' = FileModified
+    | old' == "/dev/null" = FileAdded
+    | new' == "/dev/null" = FileDeleted
+    | otherwise = FileRenamed
   where
     old' = realPath old
     new' = realPath new
@@ -26,94 +26,90 @@ diffType old new
 lineType :: String -> LineType
 lineType ('+' : _) = New
 lineType ('-' : _) = Old
-lineType _         = Context
+lineType _ = Context
 
 -- | Parse a unified diff, returning either a Patch object or a parser
 -- error message.
 parse :: L.Text -> Either String Patch
-parse input =
-  case Text.Parsec.Prim.parse patch "" input of
-    Left e  -> Left $ show e
+parse input = case Text.Parsec.Prim.parse patch "" input of
+    Left e -> Left $ show e
     Right p -> Right p
 
 patch :: Parser Patch
 patch = do
-  diffs <- many diff
-  eof
-  return $ Patch diffs
+    diffs <- many diff
+    eof
+    return $ Patch diffs
 
 diff :: Parser Diff
 diff = do
-  cmt <- comment
-  hdr <- header
-  hnk <- many hunk
-  return Diff { diffComment = cmt
-              , diffHeader = hdr
-              , diffHunks = hnk
-              }
+    cmt <- comment
+    hdr <- header
+    hnk <- many hunk
+    return Diff { diffComment = cmt, diffHeader = hdr, diffHunks = hnk }
 
 comment :: Parser [T.Text]
 comment = many $ try (notFollowedBy headerLookAhead) >> text
 
 headerLookAhead :: Parser ()
 headerLookAhead = do
-  _ <- string "--- " >> manyTill anyChar newline
-  _ <- string "+++ " >> manyTill anyChar newline
-  return ()
+    _ <- string "--- " >> manyTill anyChar newline
+    _ <- string "+++ " >> manyTill anyChar newline
+    return ()
 
 header :: Parser Header
 header = do
-  oldLine <- lookAhead text
-  _       <- string "--- "
-  oldFile <- many1 $ noneOf "\t\r\n"
-  _       <- text
-  newLine <- lookAhead text
-  _       <- string "+++ "
-  newFile <- many1 $ noneOf "\t\r\n"
-  _       <- text
-  return Header { headerType = diffType oldFile newFile
-                , headerOldFile = oldFile
-                , headerNewFile = newFile
-                , headerOldLine = oldLine
-                , headerNewLine = newLine
-                }
+    oldLine <- lookAhead text
+    _ <- string "--- "
+    oldFile <- many1 $ noneOf "\t\r\n"
+    _ <- text
+    newLine <- lookAhead text
+    _ <- string "+++ "
+    newFile <- many1 $ noneOf "\t\r\n"
+    _ <- text
+    return Header { headerType = diffType oldFile newFile
+                  , headerOldFile = oldFile
+                  , headerNewFile = newFile
+                  , headerOldLine = oldLine
+                  , headerNewLine = newLine
+                  }
 
 hunk :: Parser Hunk
 hunk = do
-  full <- lookAhead text
-  _    <- string "@@ "
-  _    <- char '-'
-  old  <- range
-  _    <- skipMany1 space
-  _    <- char '+'
-  new  <- range
-  _    <- string " @@"
-  _    <- many $ oneOf " \t"
-  cmt  <- text
-  lns  <- many line
-  return Hunk { hunkOldRange = old
-              , hunkNewRange = new
-              , hunkComment  = cmt
-              , hunkLine     = full
-              , hunkLines    = lns
-              }
+    full <- lookAhead text
+    _ <- string "@@ "
+    _ <- char '-'
+    old <- range
+    _ <- skipMany1 space
+    _ <- char '+'
+    new <- range
+    _ <- string " @@"
+    _ <- many $ oneOf " \t"
+    cmt <- text
+    lns <- many line
+    return Hunk { hunkOldRange = old
+                , hunkNewRange = new
+                , hunkComment = cmt
+                , hunkLine = full
+                , hunkLines = lns
+                }
 
 range :: Parser (Int, Int)
 range = do
-  from <- many1 digit
-  _    <- char ','
-  to   <- many1 digit
-  return (read from, read to)
+    from <- many1 digit
+    _ <- char ','
+    to <- many1 digit
+    return (read from, read to)
 
 line :: Parser Line
 line = do
-  try $ notFollowedBy header
-  _       <- lookAhead $ oneOf "+- "
-  content <- text
-  return $ Line (lineType (T.unpack content), content)
+    try $ notFollowedBy header
+    _ <- lookAhead $ oneOf "+- "
+    content <- text
+    return $ Line (lineType (T.unpack content), content)
 
 text :: Parser T.Text
 text = do
-  content <- many (noneOf "\r\n")
-  _       <- endOfLine
-  return $ T.pack content
+    content <- many (noneOf "\r\n")
+    _ <- endOfLine
+    return $ T.pack content
