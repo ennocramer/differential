@@ -56,6 +56,7 @@ diff = do
     cmt <- comment
     hdr <- header
     hnk <- many hunk
+    _ <- optional $ string "\\ No newline at end of file" <* endOfLine
     return Diff { diffComment = cmt, diffHeader = hdr, diffHunks = hnk }
 
 gitDiff :: Parser Diff
@@ -77,6 +78,7 @@ gitDiff = do
                              , headerNewLine = T.pack $ "+++ " ++ newFile
                              }
     hnk <- many hunk
+    _ <- optional $ string "\\ No newline at end of file" <* endOfLine
     return Diff { diffComment = diffline : cmt
                 , diffHeader = hdr
                 , diffHunks = hnk
