@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 -- |  A Parsec-based parser for unified diffs.
 module Differential.Parser ( Differential.Parser.parse ) where
 
@@ -22,6 +24,14 @@ diffType old new
     old' = realPath old
     new' = realPath new
 
+-- | Determine the type of diff based on 'diff --git' output
+gitDiffType :: T.Text -> ChangeType
+gitDiffType str
+    | "new " `T.isPrefixOf` str = FileAdded
+    | "deleted " `T.isPrefixOf` str = FileDeleted
+    | "rename " `T.isPrefixOf` str = FileRenamed
+    | otherwise = FileModified
+
 -- | Return whether a hunk line is Old, New, or Context line.
 lineType :: String -> LineType
 lineType ('+' : _) = New
@@ -37,7 +47,7 @@ parse input = case Text.Parsec.Prim.parse patch "" input of
 
 patch :: Parser Patch
 patch = do
-    diffs <- many diff
+    diffs <- many (gitDiff <|> diff)
     eof
     return $ Patch diffs
 
@@ -48,14 +58,34 @@ diff = do
     hnk <- many hunk
     return Diff { diffComment = cmt, diffHeader = hdr, diffHunks = hnk }
 
-comment :: Parser [T.Text]
-comment = many $ try (notFollowedBy headerLookAhead) >> text
+gitDiff :: Parser Diff
+gitDiff = do
+    _ <- lookAhead $ string "diff --git "
+    diffline <- lookAhead text
+    _ <- string "diff --git "
+    oldFile <- many1 $ noneOf " \t\r\n"
+    _ <- skipMany1 space
+    newFile <- many1 $ noneOf "\t\r\n"
+    _ <- endOfLine
+    gitline <- lookAhead text
+    cmt <- comment
+    hdr <- try header <|>
+               return Header { headerType = gitDiffType gitline
+                             , headerOldFile = oldFile
+                             , headerNewFile = newFile
+                             , headerOldLine = T.pack $ "--- " ++ oldFile
+                             , headerNewLine = T.pack $ "+++ " ++ newFile
+                             }
+    hnk <- many hunk
+    return Diff { diffComment = diffline : cmt
+                , diffHeader = hdr
+                , diffHunks = hnk
+                }
 
-headerLookAhead :: Parser ()
-headerLookAhead = do
-    _ <- string "--- " >> manyTill anyChar newline
-    _ <- string "+++ " >> manyTill anyChar newline
-    return ()
+comment :: Parser [T.Text]
+comment = many $ notFollowedBy notAComment >> text
+  where
+    notAComment = try (string "--- ") <|> try (string "diff --git ")
 
 header :: Parser Header
 header = do
