@@ -5,6 +5,7 @@ module Differential.Ui ( runUI ) where
 
 import           Brick
 import qualified Brick.AttrMap        as BA
+import qualified Brick.Focus          as BF
 import qualified Brick.Widgets.Border as BB
 import qualified Brick.Widgets.List   as BL
 
@@ -22,12 +23,9 @@ import qualified Graphics.Vty         as Vty
 data Name = NameFiles | NameDiff
     deriving (Eq, Ord, Show)
 
-data Focus = FocusFiles | FocusDiff
-    deriving (Eq, Ord, Show)
-
 data State = State { stateFiles :: BL.List Name Diff
                    , stateDiff  :: BL.List Name (Text, BA.AttrName)
-                   , stateFocus :: Focus
+                   , stateFocus :: BF.FocusRing Name
                    }
 
 attrHunk :: BA.AttrName
@@ -83,9 +81,9 @@ renderDiff diff = Vector.fromList $
 drawUI :: State -> [Widget Name]
 drawUI State{..} = [ ui ]
   where
-    files =
-        vLimit 5 $ BL.renderList drawFiles (stateFocus == FocusFiles) stateFiles
-    diff = BL.renderList drawDiff (stateFocus == FocusDiff) stateDiff
+    files = vLimit 5 $
+        BF.withFocusRing stateFocus (BL.renderList drawFiles) stateFiles
+    diff = BF.withFocusRing stateFocus (BL.renderList drawDiff) stateDiff
     ui = vBox [ files, BB.hBorder, diff ]
 
     drawFiles _ d = padRight Max $ str $ diffTitle d
@@ -97,10 +95,7 @@ appEvent s e = do
     let page = fromMaybe 1 (snd . _vpSize <$> vp)
     case e of
         Vty.EvKey (Vty.KChar '\t') [] -> continue $
-            s { stateFocus = case stateFocus s of
-                  FocusFiles -> FocusDiff
-                  FocusDiff -> FocusFiles
-              }
+            s { stateFocus = BF.focusNext (stateFocus s) }
         Vty.EvKey (Vty.KChar 'p') [] -> onFiles (return . BL.listMoveUp)
         Vty.EvKey (Vty.KChar 'n') [] -> onFiles (return . BL.listMoveDown)
         Vty.EvKey (Vty.KChar 'u') [] -> onDiff (return . BL.listMoveUp)
@@ -109,9 +104,10 @@ appEvent s e = do
             onDiff (return . BL.listMoveBy (negate page))
         Vty.EvKey (Vty.KChar ' ') [] -> onDiff (return . BL.listMoveBy page)
         Vty.EvKey (Vty.KChar 'q') [] -> halt s
-        ev -> case stateFocus s of
-            FocusFiles -> onFiles (BL.handleListEvent ev)
-            FocusDiff -> onDiff (BL.handleListEvent ev)
+        ev -> case BF.focusGetCurrent $ stateFocus s of
+            Just NameFiles -> onFiles (BL.handleListEvent ev)
+            Just NameDiff -> onDiff (BL.handleListEvent ev)
+            Nothing -> continue s
   where
     onFiles :: (BL.List Name Diff -> EventM Name (BL.List Name Diff))
             -> EventM Name (Next State)
@@ -160,5 +156,5 @@ runUI (Patch diffs) = do
                                     (maybeRenderDiff $
                                          listToMaybe diffs)
                                     1
-              , stateFocus = FocusFiles
+              , stateFocus = BF.focusRing [ NameFiles, NameDiff ]
               }
