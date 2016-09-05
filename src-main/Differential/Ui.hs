@@ -19,10 +19,14 @@ import           Differential.Diff
 
 import qualified Graphics.Vty         as Vty
 
-data Focus = FocusFiles | FocusDiff
+data Name = NameFiles | NameDiff
+    deriving (Eq, Ord, Show)
 
-data State = State { stateFiles :: BL.List Diff
-                   , stateDiff  :: BL.List (Text, BA.AttrName)
+data Focus = FocusFiles | FocusDiff
+    deriving (Eq, Ord, Show)
+
+data State = State { stateFiles :: BL.List Name Diff
+                   , stateDiff  :: BL.List Name (Text, BA.AttrName)
                    , stateFocus :: Focus
                    }
 
@@ -76,19 +80,20 @@ renderDiff diff = Vector.fromList $
     lineColor Old = attrDel
     lineColor Context = attrCtx
 
-drawUI :: State -> [Widget]
+drawUI :: State -> [Widget Name]
 drawUI State{..} = [ ui ]
   where
-    files = vLimit 5 $ BL.renderList stateFiles drawFiles
-    diff = BL.renderList stateDiff drawDiff
+    files =
+        vLimit 5 $ BL.renderList drawFiles (stateFocus == FocusFiles) stateFiles
+    diff = BL.renderList drawDiff (stateFocus == FocusDiff) stateDiff
     ui = vBox [ files, BB.hBorder, diff ]
 
     drawFiles _ d = padRight Max $ str $ diffTitle d
     drawDiff _ (line, attr) = withAttr attr $ padRight Max $ txt line
 
-appEvent :: State -> Vty.Event -> EventM (Next State)
+appEvent :: State -> Vty.Event -> EventM Name (Next State)
 appEvent s e = do
-    vp <- lookupViewport (Name "diff")
+    vp <- lookupViewport NameDiff
     let page = fromMaybe 1 (snd . _vpSize <$> vp)
     case e of
         Vty.EvKey (Vty.KChar '\t') [] -> continue $
@@ -105,10 +110,11 @@ appEvent s e = do
         Vty.EvKey (Vty.KChar ' ') [] -> onDiff (return . BL.listMoveBy page)
         Vty.EvKey (Vty.KChar 'q') [] -> halt s
         ev -> case stateFocus s of
-            FocusFiles -> onFiles (handleEvent ev)
-            FocusDiff -> onDiff (handleEvent ev)
+            FocusFiles -> onFiles (BL.handleListEvent ev)
+            FocusDiff -> onDiff (BL.handleListEvent ev)
   where
-    onFiles :: (BL.List Diff -> EventM (BL.List Diff)) -> EventM (Next State)
+    onFiles :: (BL.List Name Diff -> EventM Name (BL.List Name Diff))
+            -> EventM Name (Next State)
     onFiles f = do
         files <- f (stateFiles s)
         let render = renderDiff . snd <$> BL.listSelectedElement files
@@ -116,22 +122,24 @@ appEvent s e = do
                 stateDiff s
         continue $ s { stateFiles = files, stateDiff = diff }
 
-    onDiff :: (BL.List (Text, BA.AttrName)
-               -> EventM (BL.List (Text, BA.AttrName)))
-           -> EventM (Next State)
+    onDiff :: (BL.List Name (Text, BA.AttrName)
+               -> EventM Name (BL.List Name (Text, BA.AttrName)))
+           -> EventM Name (Next State)
     onDiff f = do
         diff <- f (stateDiff s)
         continue $ s { stateDiff = diff }
 
 appAttributes :: BA.AttrMap
-appAttributes = BA.attrMap Vty.defAttr
-                           [ (BL.listSelectedAttr, Vty.white `on` Vty.blue)
-                           , (attrHunk, fg Vty.yellow)
-                           , (attrAdd, fg Vty.green)
-                           , (attrDel, fg Vty.red)
-                           ]
+appAttributes =
+    BA.attrMap Vty.defAttr
+               [ (BL.listSelectedAttr, Vty.white `on` Vty.brightBlack)
+               , (BL.listSelectedFocusedAttr, Vty.white `on` Vty.blue)
+               , (attrHunk, fg Vty.yellow)
+               , (attrAdd, fg Vty.green)
+               , (attrDel, fg Vty.red)
+               ]
 
-app :: App State Vty.Event
+app :: App State Vty.Event Name
 app = App { appDraw = drawUI
           , appChooseCursor = neverShowCursor
           , appHandleEvent = appEvent
@@ -147,8 +155,8 @@ runUI (Patch diffs) = do
     return ()
   where
     initialState =
-        State { stateFiles = BL.list (Name "files") (Vector.fromList diffs) 1
-              , stateDiff = BL.list (Name "diff")
+        State { stateFiles = BL.list NameFiles (Vector.fromList diffs) 1
+              , stateDiff = BL.list NameDiff
                                     (maybeRenderDiff $
                                          listToMaybe diffs)
                                     1

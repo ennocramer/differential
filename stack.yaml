@@ -1,1 +1,4 @@
 resolver: lts-6.15
+extra-deps:
+  - vty-5.11
+  - brick-0.8
