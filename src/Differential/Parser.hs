@@ -78,7 +78,6 @@ gitDiff = do
                              , headerNewLine = T.pack $ "+++ " ++ newFile
                              }
     hnk <- many hunk
-    _ <- optional $ string "\\ No newline at end of file" <* endOfLine
     return Diff { diffComment = diffline : cmt
                 , diffHeader = hdr
                 , diffHunks = hnk
@@ -136,7 +135,7 @@ range = do
 line :: Parser Line
 line = do
     try $ notFollowedBy header
-    _ <- lookAhead $ oneOf "+- "
+    _ <- lookAhead $ oneOf "+- \\"
     content <- text
     return $ Line (lineType (T.unpack content), content)
 
