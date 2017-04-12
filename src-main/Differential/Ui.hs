@@ -89,25 +89,28 @@ drawUI State{..} = [ ui ]
     drawFiles _ d = padRight Max $ str $ diffTitle d
     drawDiff _ (line, attr) = withAttr attr $ padRight Max $ txt line
 
-appEvent :: State -> Vty.Event -> EventM Name (Next State)
+appEvent :: State -> BrickEvent Name e -> EventM Name (Next State)
 appEvent s e = do
     vp <- lookupViewport NameDiff
     let page = fromMaybe 1 (snd . _vpSize <$> vp)
     case e of
-        Vty.EvKey (Vty.KChar '\t') [] -> continue $
-            s { stateFocus = BF.focusNext (stateFocus s) }
-        Vty.EvKey (Vty.KChar 'p') [] -> onFiles (return . BL.listMoveUp)
-        Vty.EvKey (Vty.KChar 'n') [] -> onFiles (return . BL.listMoveDown)
-        Vty.EvKey (Vty.KChar 'u') [] -> onDiff (return . BL.listMoveUp)
-        Vty.EvKey (Vty.KChar 'd') [] -> onDiff (return . BL.listMoveDown)
-        Vty.EvKey (Vty.KChar 'b') [] ->
-            onDiff (return . BL.listMoveBy (negate page))
-        Vty.EvKey (Vty.KChar ' ') [] -> onDiff (return . BL.listMoveBy page)
-        Vty.EvKey (Vty.KChar 'q') [] -> halt s
-        ev -> case BF.focusGetCurrent $ stateFocus s of
-            Just NameFiles -> onFiles (BL.handleListEvent ev)
-            Just NameDiff -> onDiff (BL.handleListEvent ev)
-            Nothing -> continue s
+        VtyEvent e' ->
+            case e' of
+                Vty.EvKey (Vty.KChar '\t') [] -> continue $
+                    s { stateFocus = BF.focusNext (stateFocus s) }
+                Vty.EvKey (Vty.KChar 'p') [] -> onFiles (return . BL.listMoveUp)
+                Vty.EvKey (Vty.KChar 'n') [] -> onFiles (return . BL.listMoveDown)
+                Vty.EvKey (Vty.KChar 'u') [] -> onDiff (return . BL.listMoveUp)
+                Vty.EvKey (Vty.KChar 'd') [] -> onDiff (return . BL.listMoveDown)
+                Vty.EvKey (Vty.KChar 'b') [] ->
+                    onDiff (return . BL.listMoveBy (negate page))
+                Vty.EvKey (Vty.KChar ' ') [] -> onDiff (return . BL.listMoveBy page)
+                Vty.EvKey (Vty.KChar 'q') [] -> halt s
+                ev -> case BF.focusGetCurrent $ stateFocus s of
+                    Just NameFiles -> onFiles (BL.handleListEvent ev)
+                    Just NameDiff -> onDiff (BL.handleListEvent ev)
+                    Nothing -> continue s
+        _ -> continue s
   where
     onFiles :: (BL.List Name Diff -> EventM Name (BL.List Name Diff))
             -> EventM Name (Next State)
@@ -135,13 +138,12 @@ appAttributes =
                , (attrDel, fg Vty.red)
                ]
 
-app :: App State Vty.Event Name
+app :: App State e Name
 app = App { appDraw = drawUI
           , appChooseCursor = neverShowCursor
           , appHandleEvent = appEvent
           , appStartEvent = return
           , appAttrMap = const appAttributes
-          , appLiftVtyEvent = id
           }
 
 -- | Display a Patch using the Vty-UI UI.
