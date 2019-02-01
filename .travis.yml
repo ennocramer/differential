@@ -1,0 +1,75 @@
+sudo: true
+language: minimal
+
+git:
+  depth: 5
+
+cache:
+  directories:
+  - "$HOME/.cabal"
+  - "$HOME/.stack"
+  - "$TRAVIS_BUILD_DIR/.stack-work"
+
+matrix:
+  include:
+
+  - name: "Stack LTS-9 (GHC-8.0.2)"
+    env: BUILD=stack RESOLVER=lts-9
+
+  - name: "Stack LTS-11 (GHC-8.2.2)"
+    env: BUILD=stack RESOLVER=lts-11
+
+  - name: "Stack LTS-12 (GHC-8.4.4)"
+    env: BUILD=stack RESOLVER=lts-12
+
+  - name: "Stack Nightly"
+    env: BUILD=stack RESOLVER=nightly
+
+  - name: "Cabal GHC-HEAD"
+    env: BUILD=cabal
+    addons: {apt: {packages: [cabal-install-head,ghc-head], sources: [hvr-ghc]}}
+
+  - name: "Stack LTS-12 (GHC-8.4.4) [OSX]"
+    env: BUILD=stack RESOLVER=lts-12
+    os: osx
+
+  allow_failures:
+  - name: "Cabal GHC-HEAD"
+  - name: "Stack Nightly"
+
+install:
+  - |
+    if [ $BUILD = cabal ]; then
+      export PATH="/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$PATH"
+
+      cabal --version
+      ghc --version
+      cabal new-update
+      cabal new-build all --enable-tests --enable-benchmarks --only-dependencies $CABALARGS
+    else
+      mkdir -p ~/.local/bin
+      export PATH="$HOME/.local/bin:$PATH"
+
+      # install stack
+      curl -L "https://www.stackage.org/stack/${TRAVIS_OS_NAME}-x86_64" | tar xz --strip-components=1 -C ~/.local/bin/
+
+      # build project with stack
+      if [ -n "$RESOLVER" ]; then
+        ARGS="--resolver $RESOLVER"
+      fi
+      stack --version
+      stack $ARGS --no-terminal setup
+      stack $ARGS ghc -- --version
+      stack $ARGS --no-terminal build --test --bench --only-dependencies
+    fi
+
+script:
+  - |
+    if [ $BUILD = cabal ]; then
+      cabal new-test all --enable-tests --enable-benchmarks $CABALARGS
+    else
+      if [ -n "$RESOLVER" ]; then
+        ARGS="--resolver $RESOLVER"
+      fi
+      stack $ARGS --no-terminal build --test --bench --no-run-benchmarks --haddock --no-haddock-deps
+    fi
