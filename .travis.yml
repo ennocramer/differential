@@ -13,6 +13,26 @@ cache:
 matrix:
   include:
 
+  - name: "Cabal GHC-8.0.1"
+    env: BUILD=cabal
+    addons: {apt: {packages: [cabal-install-2.2,ghc-8.0.1], sources: [hvr-ghc]}}
+
+  - name: "Cabal GHC-8.2.2"
+    env: BUILD=cabal
+    addons: {apt: {packages: [cabal-install-2.2,ghc-8.2.2], sources: [hvr-ghc]}}
+
+  - name: "Cabal GHC-8.4.4"
+    env: BUILD=cabal
+    addons: {apt: {packages: [cabal-install-2.2,ghc-8.4.4], sources: [hvr-ghc]}}
+
+  - name: "Cabal GHC-8.6.3"
+    env: BUILD=cabal
+    addons: {apt: {packages: [cabal-install-2.2,ghc-8.6.3], sources: [hvr-ghc]}}
+
+  - name: "Cabal GHC-HEAD"
+    env: BUILD=cabal CABALARGS=--allow-newer
+    addons: {apt: {packages: [cabal-install-head,ghc-head], sources: [hvr-ghc]}}
+
   - name: "Stack LTS-9 (GHC-8.0.2)"
     env: BUILD=stack RESOLVER=lts-9
 
@@ -24,10 +44,6 @@ matrix:
 
   - name: "Stack Nightly"
     env: BUILD=stack RESOLVER=nightly
-
-  - name: "Cabal GHC-HEAD"
-    env: BUILD=cabal
-    addons: {apt: {packages: [cabal-install-head,ghc-head], sources: [hvr-ghc]}}
 
   - name: "Stack LTS-12 (GHC-8.4.4) [OSX]"
     env: BUILD=stack RESOLVER=lts-12
@@ -45,7 +61,7 @@ install:
       cabal --version
       ghc --version
       cabal new-update
-      cabal new-build all --enable-tests --enable-benchmarks --only-dependencies $CABALARGS
+      cabal new-build all --only-dependencies $CABALARGS
     else
       mkdir -p ~/.local/bin
       export PATH="$HOME/.local/bin:$PATH"
@@ -66,7 +82,7 @@ install:
 script:
   - |
     if [ $BUILD = cabal ]; then
-      cabal new-test all --enable-tests --enable-benchmarks $CABALARGS
+      cabal new-build all $CABALARGS
     else
       if [ -n "$RESOLVER" ]; then
         ARGS="--resolver $RESOLVER"
